@@ -49,13 +49,48 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SignalScreen(viewModel: SignalViewModel = hiltViewModel()) {
-    val message = ""
-    val connectedCount = 0
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val connectedCount by viewModel.connectedDeviceCount.collectAsStateWithLifecycle()
 
     var permissionsGranted by remember { mutableStateOf(false) }
     var textInput by remember { mutableStateOf("") }
 
-    //Add permission check here
+    val requiredPermissions = remember {
+        val permissions = mutableListOf<String>()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+            permissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+        }
+
+        permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        {
+            permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
+        }
+
+        permissions.toTypedArray()
+    }
+
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val essentialPermissionsGranted = results.entries.all {
+            it.value || it.key == Manifest.permission.ACCESS_FINE_LOCATION
+        }
+
+        if (essentialPermissionsGranted) {
+            permissionsGranted = true
+            viewModel.startNetworking()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        permissionsLauncher.launch(requiredPermissions)
+    }
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -90,7 +125,7 @@ fun SignalScreen(viewModel: SignalViewModel = hiltViewModel()) {
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
-                onClick = {  },
+                onClick = { viewModel.sendSignal(textInput) },
                 modifier = Modifier.size(width = 200.dp, height = 60.dp)
             ) {
                 Text("Send Signal", style = MaterialTheme.typography.titleLarge)
